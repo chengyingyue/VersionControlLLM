@@ -121,7 +121,7 @@
                     
                     <!-- Streaming Assistant Message -->
                     <div v-if="streamingContent" class="flex flex-col max-w-[85%] mr-auto items-start">
-                        <div class="px-4 py-3 rounded-2xl bg-gray-100 text-gray-800 markdown-body">
+                        <div class="px-4 py-3 rounded-2xl bg-gray-100 text-gray-800 markdown-body" ref="streamingContainer">
                             <div v-html="renderMarkdown(streamingContent)"></div>
                         </div>
                     </div>
@@ -238,6 +238,7 @@
                 const currentId = ref(null);
                 const messages = ref([]);
                 const streamingContent = ref("");
+                const streamingContainer = ref(null);
                 const inputMessage = ref("");
                 const isGenerating = ref(false);
                 const searchQuery = ref("");
@@ -631,6 +632,28 @@
                     });
                 }, { deep: true });
 
+                // Instant render Mermaid for streaming content
+                watch(streamingContent, async () => {
+                    await nextTick();
+                    if (!streamingContainer.value) return;
+                    const nodes = streamingContainer.value.querySelectorAll('pre code.language-mermaid');
+                    nodes.forEach(async (el, i) => {
+                        const code = el.innerText;
+                        const pre = el.parentElement;
+                        const container = pre.parentElement;
+                        const id = 'mermaid-stream-' + Date.now() + '-' + i;
+                        try {
+                            const { svg } = await mermaid.render(id, code);
+                            const div = document.createElement('div');
+                            div.className = 'mermaid-container my-4';
+                            div.innerHTML = svg;
+                            container.replaceChild(div, pre);
+                        } catch (err) {
+                            console.error("Mermaid error", err);
+                        }
+                    });
+                });
+
                 return {
                     isLoggedIn, currentUser, loginUserId, checkAuth, login, logout,
                     conversations, currentId, messages, streamingContent, inputMessage, 
@@ -639,6 +662,7 @@
                     selectConversation, createChat, sendMessage, stopGeneration,
                     forkConversation, deleteConversation, exportMarkdown, editName,
                     updateSystemPrompt, startRewrite, rollbackTo, renderMarkdown, formatTime
+                    , streamingContainer
                 };
             }
         }).mount('#app');
