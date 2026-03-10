@@ -5,7 +5,7 @@ import sys
 import asyncio
 from typing import AsyncGenerator, List, Dict, Any, Set
 
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, PlainTextResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -16,7 +16,8 @@ from app.logic.storage_manager import StorageManager
 from app.models.schema import (
     ChatRequest, RewriteRequest, ForkRequest, 
     RollbackRequest, CreateConversationRequest,
-    RenameRequest, UpdateSystemPromptRequest
+    RenameRequest, UpdateSystemPromptRequest,
+    LoginRequest
 )
 
 # 配置日志
@@ -58,15 +59,74 @@ async def read_index():
         return FileResponse(index_path)
     return PlainTextResponse("Frontend index.html not found. Please create it in 'static/index.html'.")
 
-DEFAULT_USER = "debug_user"
+# --- Authentication Dependencies ---
+
+async def get_current_user(request: Request) -> str:
+    """
+    根据 Session 获取当前登录用户 ID。
+    
+    :param request: FastAPI Request 对象
+    :return: 用户 ID
+    :raises HTTPException: 如果未登录则返回 401
+    """
+    user_id = request.session.get("user_id")
+    if not user_id:
+        # 为了方便调试，如果没有 Session 且处于开发环境，可以返回一个默认值
+        # 但在正式 Phase 3 中，我们强制要求登录
+        logging.warning("Unauthorized access attempt: No user_id in session")
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    return user_id
+
+def get_storage(user_id: str = Depends(get_current_user)) -> StorageManager:
+    """
+    依赖注入：获取当前用户的存储管理器。
+    
+    :param user_id: 当前登录用户 ID
+    :return: StorageManager 实例
+    """
+    return StorageManager(user_id)
+
+# --- Auth Endpoints ---
+
+@app.post("/api/login")
+async def login(request: Request, login_data: LoginRequest):
+    """
+    用户登录端点。
+    
+    :param request: FastAPI Request 对象
+    :param login_data: 包含 user_id 的登录请求
+    :return: 登录成功消息
+    """
+    user_id = login_data.user_id.strip()
+    if not user_id:
+        raise HTTPException(status_code=400, detail="User ID cannot be empty")
+    
+    request.session["user_id"] = user_id
+    logging.info(f"User logged in: {user_id}")
+    return {"message": "Login successful", "user_id": user_id}
+
+@app.post("/api/logout")
+async def logout(request: Request):
+    """
+    用户登出端点。
+    """
+    user_id = request.session.pop("user_id", None)
+    logging.info(f"User logged out: {user_id}")
+    return {"message": "Logout successful"}
+
+@app.get("/api/me")
+async def get_me(user_id: str = Depends(get_current_user)):
+    """
+    获取当前登录用户信息。
+    """
+    return {"user_id": user_id}
+
+# --- Chat Endpoints ---
 
 # 用于跟踪正在运行的任务，支持中止生成
 # 格式: { "user_id_conv_id": asyncio.Event }
 # 使用 Event 来标记是否需要停止
 stop_events: Dict[str, asyncio.Event] = {}
-
-def get_storage() -> StorageManager:
-    return StorageManager(DEFAULT_USER)
 
 @app.get("/api/conversations")
 async def list_conversations(storage: StorageManager = Depends(get_storage)):
@@ -116,16 +176,16 @@ async def delete_conversation(conversation_id: str, storage: StorageManager = De
     return {"message": "Success"}
 
 @app.post("/api/chat/stop")
-async def stop_chat(conversation_id: str):
+async def stop_chat(conversation_id: str, user_id: str = Depends(get_current_user)):
     """停止正在进行的生成任务"""
-    task_key = f"{DEFAULT_USER}_{conversation_id}"
+    task_key = f"{user_id}_{conversation_id}"
     if task_key in stop_events:
         stop_events[task_key].set()
         return {"message": "Stop signal sent"}
     return {"message": "No active task found"}
 
 @app.post("/api/chat")
-async def chat(request: ChatRequest, storage: StorageManager = Depends(get_storage)):
+async def chat(request: ChatRequest, user_id: str = Depends(get_current_user), storage: StorageManager = Depends(get_storage)):
     """向对话追加消息并流式生成回复"""
     messages = storage.get_messages(request.conversation_id)
     if not messages:
@@ -134,7 +194,7 @@ async def chat(request: ChatRequest, storage: StorageManager = Depends(get_stora
     storage.append_message(request.conversation_id, "user", request.message)
     updated_messages = storage.get_messages(request.conversation_id)
     
-    task_key = f"{DEFAULT_USER}_{request.conversation_id}"
+    task_key = f"{user_id}_{request.conversation_id}"
     stop_events[task_key] = asyncio.Event()
 
     async def generate_stream():
@@ -187,13 +247,13 @@ async def rollback(request: RollbackRequest, storage: StorageManager = Depends(g
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/rewrite")
-async def rewrite(request: RewriteRequest, storage: StorageManager = Depends(get_storage)):
+async def rewrite(request: RewriteRequest, user_id: str = Depends(get_current_user), storage: StorageManager = Depends(get_storage)):
     """重写历史并重新开始生成"""
     storage.rollback_to(request.conversation_id, request.index - 1)
     storage.append_message(request.conversation_id, request.role, request.new_content)
     updated_messages = storage.get_messages(request.conversation_id)
     
-    task_key = f"{DEFAULT_USER}_{request.conversation_id}"
+    task_key = f"{user_id}_{request.conversation_id}"
     stop_events[task_key] = asyncio.Event()
 
     async def generate_stream():

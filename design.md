@@ -99,8 +99,24 @@ graph TD
 ## 6. API 接口扩展 (前端配套)
 - **静态资源托管**：后端需要增加 `StaticFiles` 挂载，将前端 HTML/JS 暴露。
 - **对话列表检索**：优化 `GET /api/conversations`，返回更丰富的元数据以支持侧边栏显示。
+- **用户登录 (Phase 3)**:
+  - `POST /api/login`: 接收 `user_id` (工号/姓名)，在 Session 中记录。
+  - `POST /api/logout`: 清除 Session。
+  - `GET /api/me`: 获取当前登录用户信息。
 
-## 7. 演进路线
+## 7. 用户隔离逻辑 (Phase 3)
+### 7.1 权限校验流程图
+```mermaid
+graph TD
+    A[前端请求 API] --> B{Session 是否有效?}
+    B -- 否 --> C[返回 401 Unauthorized]
+    B -- 是 --> D[从 Session 获取 user_id]
+    D --> E[实例化 StorageManager(user_id)]
+    E --> F[执行业务逻辑]
+    F --> G[返回结果]
+```
+
+## 8. 演进路线
 - **阶段一 (Done)**：完成一文件一对话存储、SSE 生成通路、Fork/Rewrite 核心逻辑。
 - **阶段二 (Done)**：前端 UI 开发（Vue 3 + Tailwind），集成 Markdown/Mermaid 渲染。
 - **阶段三 (Next)**：引入用户登录界面与多用户隔离，完善 Session 管理。

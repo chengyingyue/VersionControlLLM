@@ -130,11 +130,17 @@ class ManualApiTest(unittest.TestCase):
         cls._original_llm_client = app_main.llm_client
         app_main.llm_client = _MockLLMClient(chunk_delay_s=0.0)
         cls.client = TestClient(app_main.app)
+        # 登录为默认用户以保持向后兼容性
+        cls.client.post("/api/login", json={"user_id": "debug_user"})
 
     @classmethod
     def tearDownClass(cls) -> None:
         app_main.llm_client = cls._original_llm_client
         cls.client.close()
+
+    def _login(self, client: TestClient, user_id: str = "debug_user") -> None:
+        resp = client.post("/api/login", json={"user_id": user_id})
+        self.assertEqual(resp.status_code, 200, f"Login failed: {resp.text}")
 
     def _create_conversation(self, name: str = "测试对话", system_prompt: str = "你是一个助手") -> str:
         resp = self.client.post(
@@ -269,6 +275,7 @@ class ManualApiTest(unittest.TestCase):
         def _run_stream_request() -> None:
             try:
                 with TestClient(app_main.app) as client_stream:
+                    self._login(client_stream)
                     with client_stream.stream(
                         "POST",
                         "/api/chat",
@@ -293,6 +300,7 @@ class ManualApiTest(unittest.TestCase):
         deadline = time.time() + 3.0
         while time.time() < deadline:
             with TestClient(app_main.app) as client_stop:
+                self._login(client_stop)
                 stop_resp = client_stop.post("/api/chat/stop", params={"conversation_id": conv_id})
             if stop_resp.status_code == 200 and stop_resp.json().get("message") == "Stop signal sent":
                 stop_sent = True

@@ -5,6 +5,9 @@ class Message(BaseModel):
     role: str
     content: str
 
+class LoginRequest(BaseModel):
+    user_id: str
+
 class ChatRequest(BaseModel):
     conversation_id: str
     message: str

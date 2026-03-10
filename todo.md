@@ -22,10 +22,10 @@
   - [x] 版本操作 UI：实现 Fork、Rename、Export、Modify System Prompt 的交互弹窗。
   - [x] 历史操控：在消息块上实现“从此处重写”按钮逻辑。
 
-- **阶段三：用户系统与隔离 (Next)**
-  - [ ] 实现登录端点：支持工号/姓名登录，并在 Session 中记录 `user_id`。
-  - [ ] 目录隔离：确保 `storage_manager` 根据当前 Session 的 `user_id` 访问对应目录。
-  - [ ] 权限校验：为所有敏感端点增加 `get_current_user` 依赖项。
+- **阶段三：用户系统与隔离 (Done)**
+  - [x] 实现登录端点：支持工号/姓名登录，并在 Session 中记录 `user_id`。
+  - [x] 目录隔离：确保 `storage_manager` 根据当前 Session 的 `user_id` 访问对应目录。
+  - [x] 权限校验：为所有敏感端点增加 `get_current_user` 依赖项。
 
 - **调试与优化**
   - [ ] 复用 `llm_client` 的 Mock 机制进行稳定测试。
