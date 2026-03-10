@@ -44,29 +44,24 @@ python -m app.main
 ```
 服务默认启动在 `http://localhost:8002`。
 
-## 4. 阶段一功能验证 (API 测试建议)
+## 4. 阶段二：前端界面访问
 
-由于目前处于阶段一（后端核心已完成，前端开发中），你可以使用 API 测试工具（如 Postman 或 cURL）进行功能验证：
+目前已进入阶段二，你可以通过浏览器直接访问前端界面：
 
-### 4.1 创建对话
-- **URL**: `POST /api/conversations`
-- **Body**: `{"name": "测试对话", "system_prompt": "你是一个助手"}`
-- **验证**: 检查 `data/conversations/debug_user/` 下是否生成了对应的 `.md` 文件。
+1. **启动后端服务**：
+   ```bash
+   python -m app.main
+   ```
+2. **访问地址**：`http://localhost:8002` (默认端口)
 
-### 4.2 发起流式聊天
-- **URL**: `POST /api/chat`
-- **Body**: `{"conversation_id": "{ID}", "message": "你好"}`
-- **验证**: 观察 SSE (Server-Sent Events) 输出，并检查 `.md` 文件是否追加了消息。
-
-### 4.3 分叉对话 (Fork)
-- **URL**: `POST /api/fork`
-- **Body**: `{"conversation_id": "{ID}", "new_name": "我的分叉支线"}`
-- **验证**: 检查是否生成了新的文件，内容与原文件一致但元数据已更新。
-
-### 4.4 历史重写 (Rewrite)
-- **URL**: `POST /api/rewrite`
-- **Body**: `{"conversation_id": "{ID}", "index": 1, "new_content": "请重新回答..."}`
-- **验证**: 文件应在索引 1 处被截断，并基于新内容重新生成。
+### 前端功能概览
+- **侧边栏**：查看和搜索对话列表，支持新建/删除对话。
+- **对话区**：流式 Markdown 渲染，支持 Mermaid 图表。
+- **版本控制**：
+  - **Fork**：复制当前对话为新分支。
+  - **Rewrite**：修改历史消息并截断重生成。
+  - **Rollback**：回滚到指定的历史版本。
+  - **System Prompt**：实时修改对话的系统设定。
 
 ## 5. 存储结构说明
 

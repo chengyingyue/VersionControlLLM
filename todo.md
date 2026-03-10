@@ -7,12 +7,12 @@
   - [x] 实现中止逻辑：支持 `/api/chat/stop` 中止 LLM 推理任务。
 
 - **阶段一验证方法 (Manual API Test)**
-  - [ ] **创建对话**：调用 `POST /api/conversations`，验证 `data/conversations/debug_user/` 下是否生成了带 Frontmatter 的 .md 文件。
-  - [ ] **流式对话**：调用 `POST /api/chat`，观察是否返回 SSE 数据流（delta），且结束后 .md 文件追加了 `# Message 1` 和 `# Message 2`。
-  - [ ] **对话 Fork**：调用 `POST /api/fork`，验证是否生成了内容一致但 ID/Name 不同的新 .md 文件。
-  - [ ] **历史重写**：调用 `POST /api/rewrite` (指向 index 1)，验证文件是否被截断并重新生成了后续消息。
-  - [ ] **中止生成**：在 `chat` 过程中调用 `/api/chat/stop`，验证流是否停止且文件保存了 `[Stopped]` 标记。
-  - [ ] **改名与导出**：验证 `/api/conversations/rename` 后文件元数据是否更新，`/api/conversations/{id}/export` 是否返回完整源码。
+  - [x] **创建对话**：调用 `POST /api/conversations`，验证 `data/conversations/debug_user/` 下是否生成了带 Frontmatter 的 .md 文件。
+  - [x] **流式对话**：调用 `POST /api/chat`，观察是否返回 SSE 数据流（delta），且结束后 .md 文件追加了 `# Message 1` 和 `# Message 2`。
+  - [x] **对话 Fork**：调用 `POST /api/fork`，验证是否生成了内容一致但 ID/Name 不同的新 .md 文件。
+  - [x] **历史重写**：调用 `POST /api/rewrite` (指向 index 1)，验证文件是否被截断并重新生成了后续消息。
+  - [x] **中止生成**：在 `chat` 过程中调用 `/api/chat/stop`，验证流是否停止且文件保存了 `[Stopped]` 标记。
+  - [x] **改名与导出**：验证 `/api/conversations/rename` 后文件元数据是否更新，`/api/conversations/{id}/export` 是否返回完整源码。
 
 - **阶段二：前端展示与渲染 (Next)**
   - [ ] 搭建前端基础骨架：使用 Vue 3 + Tailwind CSS（CDN 引入，无需构建）。

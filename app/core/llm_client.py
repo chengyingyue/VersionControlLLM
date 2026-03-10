@@ -221,36 +221,39 @@ class LLMClient:
         }
 
         try:
-            response = requests.post(url, headers=headers, json=data, stream=stream, timeout=120)
-            response.raise_for_status()
-
             if stream:
                 async def async_stream_generator():
                     full_response_for_log = ""
-                    stream_chunks = []
-                    for chunk in response.iter_lines():
-                        if chunk:
-                            decoded_chunk = chunk.decode('utf-8')
-                            if decoded_chunk.startswith('data: '):
-                                json_data_str = decoded_chunk[6:]
-                                if json_data_str.strip() == '[DONE]':
-                                    break
-                                try:
-                                    json_data = json.loads(json_data_str)
-                                    delta_content = json_data.get('choices', [{}])[0].get('delta', {}).get('content', '')
-                                    if delta_content:
-                                        full_response_for_log += delta_content
-                                        stream_chunks.append(delta_content)
-                                        yield delta_content
-                                except:
+                    try:
+                        async with self.client.stream("POST", url, headers=headers, json=data) as response:
+                            response.raise_for_status()
+                            async for line in response.aiter_lines():
+                                if not line:
                                     continue
-                    # 记录对话日志
-                    self._log_to_markdown(messages, full_response_for_log)
-                    # 录制 Mock 数据
-                    self._save_mock_data(request_hash, messages, full_response_for_log, is_stream=True)
+                                if line.startswith('data: '):
+                                    json_data_str = line[6:]
+                                    if json_data_str.strip() == '[DONE]':
+                                        break
+                                    try:
+                                        json_data = json.loads(json_data_str)
+                                        delta_content = json_data.get('choices', [{}])[0].get('delta', {}).get('content', '')
+                                        if delta_content:
+                                            full_response_for_log += delta_content
+                                            yield delta_content
+                                    except:
+                                        continue
+                        # 记录对话日志
+                        self._log_to_markdown(messages, full_response_for_log)
+                        # 录制 Mock 数据
+                        self._save_mock_data(request_hash, messages, full_response_for_log, is_stream=True)
+                    except Exception as e:
+                        logging.error(f"Streaming error: {e}")
+                        yield f"Error: {str(e)}"
 
                 return async_stream_generator()
             else:
+                response = await self.client.post(url, headers=headers, json=data)
+                response.raise_for_status()
                 output_content = response.json()['choices'][0]['message']['content']
                 self._log_to_markdown(messages, output_content)
                 # 录制 Mock 数据

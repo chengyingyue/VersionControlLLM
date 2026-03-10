@@ -244,3 +244,9 @@ updated_at: {now}
             return ""
         with open(path, "r", encoding="utf-8") as f:
             return f.read()
+
+    def delete_conversation(self, conversation_id: str):
+        """删除对话文件"""
+        path = self._get_file_path(conversation_id)
+        if os.path.exists(path):
+            os.remove(path)

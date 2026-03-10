@@ -2,3 +2,5 @@ __pycache__/
 .env
 .venv/
 .vscode/
+data/conversations/
+data/mock_responses/

@@ -7,7 +7,8 @@ from typing import AsyncGenerator, List, Dict, Any, Set
 
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse, PlainTextResponse
+from fastapi.responses import StreamingResponse, PlainTextResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.core.llm_client import llm_client
@@ -42,6 +43,20 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# 挂载静态文件
+STATIC_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "static")
+if not os.path.exists(STATIC_DIR):
+    os.makedirs(STATIC_DIR)
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+@app.get("/")
+async def read_index():
+    """返回前端主页面"""
+    index_path = os.path.join(STATIC_DIR, "index.html")
+    if os.path.exists(index_path):
+        return FileResponse(index_path)
+    return PlainTextResponse("Frontend index.html not found. Please create it in 'static/index.html'.")
 
 DEFAULT_USER = "debug_user"
 
@@ -92,6 +107,12 @@ async def rename_conversation(request: RenameRequest, storage: StorageManager = 
 async def update_system_prompt(request: UpdateSystemPromptRequest, storage: StorageManager = Depends(get_storage)):
     """修改对话的 System Prompt"""
     storage.update_system_prompt(request.conversation_id, request.new_prompt)
+    return {"message": "Success"}
+
+@app.delete("/api/conversations/{conversation_id}")
+async def delete_conversation(conversation_id: str, storage: StorageManager = Depends(get_storage)):
+    """删除指定对话"""
+    storage.delete_conversation(conversation_id)
     return {"message": "Success"}
 
 @app.post("/api/chat/stop")

@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VC-LLM - 对话版本控制系统</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Vue 3 CDN -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <!-- Markdown-it CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/markdown-it/dist/markdown-it.min.js"></script>
+    <!-- Mermaid CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <!-- Highlight.js CDN -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        .sidebar { width: 300px; }
+        .chat-area { flex: 1; }
+        .markdown-body pre { background-color: #1e1e1e; padding: 1rem; border-radius: 0.5rem; overflow-x: auto; }
+        .markdown-body code { font-family: 'Fira Code', monospace; }
+        .message-user { align-self: flex-end; background-color: #3b82f6; color: white; border-radius: 1rem 1rem 0 1rem; }
+        .message-assistant { align-self: flex-start; background-color: #f3f4f6; color: #1f2937; border-radius: 1rem 1rem 1rem 0; }
+        .mermaid-container svg { max-width: 100%; height: auto; }
+        [v-cloak] { display: none; }
+    </style>
+</head>
+<body class="bg-gray-50 h-screen overflow-hidden">
+    <div id="app" v-cloak class="flex h-full">
+        <!-- Sidebar -->
+        <aside class="sidebar bg-white border-r border-gray-200 flex flex-col">
+            <div class="p-4 border-b border-gray-200 flex justify-between items-center">
+                <h1 class="text-xl font-bold text-blue-600">VC-LLM</h1>
+                <button @click="showNewChatModal = true" class="p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100">
+                    <i data-lucide="plus"></i>
+                </button>
+            </div>
+            <div class="p-4">
+                <input v-model="searchQuery" type="text" placeholder="搜索对话..." class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+            </div>
+            <div class="flex-1 overflow-y-auto">
+                <div v-for="conv in filteredConversations" :key="conv.id" 
+                     @click="selectConversation(conv.id)"
+                     :class="['p-4 cursor-pointer hover:bg-gray-100 transition-colors border-b border-gray-50', currentId === conv.id ? 'bg-blue-50 border-l-4 border-l-blue-500' : '']">
+                    <div class="flex justify-between items-start mb-1">
+                        <span class="font-medium truncate flex-1">{{ conv.name }}</span>
+                        <button @click.stop="deleteConversation(conv.id)" class="text-gray-400 hover:text-red-500">
+                            <i data-lucide="trash-2" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                    <div class="text-xs text-gray-500 flex justify-between">
+                        <span>{{ formatTime(conv.updated_at) }}</span>
+                        <span class="bg-gray-200 px-1 rounded">{{ conv.id }}</span>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="chat-area flex flex-col relative bg-white">
+            <!-- Header -->
+            <header v-if="currentConversation" class="h-16 border-b border-gray-200 px-6 flex items-center justify-between bg-white z-10">
+                <div class="flex items-center gap-4 overflow-hidden">
+                    <h2 @click="editName" class="text-lg font-semibold truncate cursor-pointer hover:underline">{{ currentConversation.name }}</h2>
+                    <div class="flex gap-2">
+                        <button @click="showSystemPromptModal = true" class="text-xs px-2 py-1 bg-gray-100 rounded hover:bg-gray-200">System Prompt</button>
+                    </div>
+                </div>
+                <div class="flex items-center gap-3">
+                    <button @click="forkConversation" class="flex items-center gap-1 px-3 py-1.5 bg-green-50 text-green-700 rounded-md hover:bg-green-100 text-sm">
+                        <i data-lucide="git-fork" class="w-4 h-4"></i> Fork
+                    </button>
+                    <button @click="exportMarkdown" class="flex items-center gap-1 px-3 py-1.5 bg-gray-50 text-gray-700 rounded-md hover:bg-gray-100 text-sm">
+                        <i data-lucide="download" class="w-4 h-4"></i> Export
+                    </button>
+                </div>
+            </header>
+
+            <!-- Messages -->
+            <div ref="messageContainer" class="flex-1 overflow-y-auto p-6 space-y-6">
+                <div v-if="!currentId" class="h-full flex flex-col items-center justify-center text-gray-400">
+                    <i data-lucide="message-square" class="w-16 h-16 mb-4"></i>
+                    <p>选择一个对话或创建新对话开始</p>
+                </div>
+                
+                <template v-else>
+                    <!-- Skip Message 0 (System) in main view, or show it specially -->
+                    <div v-for="(msg, index) in messages" :key="index" 
+                         :class="['flex flex-col max-w-[85%] group', msg.role === 'user' ? 'ml-auto items-end' : 'mr-auto items-start']">
+                        <div v-if="index > 0" :class="['px-4 py-3 rounded-2xl markdown-body relative', msg.role === 'user' ? 'message-user' : 'message-assistant']">
+                            <div v-html="renderMarkdown(msg.content)"></div>
+                            <!-- Action Buttons on Hover -->
+                            <div :class="['absolute top-0 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2 p-1', msg.role === 'user' ? 'right-full mr-2' : 'left-full ml-2']">
+                                <button @click="startRewrite(index)" class="p-1 bg-white border border-gray-200 rounded shadow-sm hover:bg-gray-50 text-gray-600" title="从此处重写">
+                                    <i data-lucide="edit-3" class="w-4 h-4"></i>
+                                </button>
+                                <button @click="rollbackTo(index)" class="p-1 bg-white border border-gray-200 rounded shadow-sm hover:bg-gray-50 text-gray-600" title="截断到此处">
+                                    <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Streaming Assistant Message -->
+                    <div v-if="streamingContent" class="flex flex-col max-w-[85%] mr-auto items-start">
+                        <div class="px-4 py-3 rounded-2xl bg-gray-100 text-gray-800 markdown-body">
+                            <div v-html="renderMarkdown(streamingContent)"></div>
+                        </div>
+                    </div>
+                </template>
+            </div>
+
+            <!-- Input Area -->
+            <div v-if="currentId" class="p-4 border-t border-gray-200 bg-gray-50">
+                <div class="max-w-4xl mx-auto relative">
+                    <div v-if="isGenerating" class="absolute -top-12 left-0 right-0 flex justify-center">
+                        <button @click="stopGeneration" class="px-4 py-1.5 bg-red-500 text-white rounded-full flex items-center gap-2 hover:bg-red-600 shadow-lg">
+                            <i data-lucide="square" class="w-4 h-4 fill-current"></i> 停止生成
+                        </button>
+                    </div>
+                    <textarea 
+                        v-model="inputMessage" 
+                        @keydown.enter.prevent="sendMessage"
+                        :disabled="isGenerating"
+                        placeholder="输入消息，Shift+Enter 换行..."
+                        class="w-full rounded-xl border border-gray-300 px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none resize-none min-h-[56px] max-h-48 disabled:bg-gray-100"
+                        rows="1"
+                    ></textarea>
+                    <button 
+                        @click="sendMessage" 
+                        :disabled="isGenerating || !inputMessage.trim()"
+                        class="absolute right-3 bottom-3 p-1.5 bg-blue-600 text-white rounded-lg disabled:bg-gray-300 hover:bg-blue-700 transition-colors"
+                    >
+                        <i data-lucide="send" class="w-5 h-5"></i>
+                    </button>
+                </div>
+            </div>
+        </main>
+
+        <!-- Modals -->
+        <!-- New Chat Modal -->
+        <div v-if="showNewChatModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div class="bg-white rounded-xl shadow-xl w-[450px] overflow-hidden">
+                <div class="p-6 border-b border-gray-100">
+                    <h3 class="text-xl font-bold">创建新对话</h3>
+                </div>
+                <div class="p-6 space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">对话名称</label>
+                        <input v-model="newChatForm.name" type="text" class="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">System Prompt</label>
+                        <textarea v-model="newChatForm.systemPrompt" class="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 h-32"></textarea>
+                    </div>
+                </div>
+                <div class="p-6 bg-gray-50 flex justify-end gap-3">
+                    <button @click="showNewChatModal = false" class="px-4 py-2 text-gray-600 hover:bg-gray-200 rounded-lg">取消</button>
+                    <button @click="createChat" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">创建</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- System Prompt Modal -->
+        <div v-if="showSystemPromptModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div class="bg-white rounded-xl shadow-xl w-[600px]">
+                <div class="p-6 border-b">
+                    <h3 class="text-xl font-bold">修改 System Prompt</h3>
+                </div>
+                <div class="p-6">
+                    <textarea v-model="systemPromptText" class="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 h-64 font-mono text-sm"></textarea>
+                </div>
+                <div class="p-6 bg-gray-50 flex justify-end gap-3 rounded-b-xl">
+                    <button @click="showSystemPromptModal = false" class="px-4 py-2 text-gray-600 hover:bg-gray-200 rounded-lg">取消</button>
+                    <button @click="updateSystemPrompt" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">保存修改</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref, computed, onMounted, nextTick, watch } = Vue;
+
+        createApp({
+            setup() {
+                const conversations = ref([]);
+                const currentId = ref(null);
+                const messages = ref([]);
+                const streamingContent = ref("");
+                const inputMessage = ref("");
+                const isGenerating = ref(false);
+                const searchQuery = ref("");
+                const showNewChatModal = ref(false);
+                const showSystemPromptModal = ref(false);
+                const systemPromptText = ref("");
+                const newChatForm = ref({
+                    name: "新对话",
+                    systemPrompt: "你是一个专业的 Python 专家，请用简洁的代码回答问题。"
+                });
+
+                const md = window.markdownit({
+                    highlight: function (str, lang) {
+                        if (lang && hljs.getLanguage(lang)) {
+                            try {
+                                return hljs.highlight(str, { language: lang }).value;
+                            } catch (__) {}
+                        }
+                        return ''; // use external default escaping
+                    }
+                });
+
+                // --- Computed ---
+                const filteredConversations = computed(() => {
+                    if (!searchQuery.value) return conversations.value;
+                    return conversations.value.filter(c => c.name.toLowerCase().includes(searchQuery.value.toLowerCase()));
+                });
+
+                const currentConversation = computed(() => {
+                    return conversations.value.find(c => c.id === currentId.value);
+                });
+
+                // --- Methods ---
+                const fetchConversations = async () => {
+                    const res = await fetch('/api/conversations');
+                    conversations.value = await res.json();
+                };
+
+                const selectConversation = async (id) => {
+                    currentId.value = id;
+                    const res = await fetch(`/api/conversations/${id}`);
+                    const data = await res.json();
+                    messages.value = data.messages;
+                    
+                    // Set system prompt text from Message 0
+                    if (messages.value.length > 0 && messages.value[0].role === 'system') {
+                        systemPromptText.value = messages.value[0].content;
+                    }
+                    
+                    await nextTick();
+                    scrollToBottom();
+                    lucide.createIcons();
+                };
+
+                const createChat = async () => {
+                    const res = await fetch('/api/conversations', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            name: newChatForm.name,
+                            system_prompt: newChatForm.systemPrompt
+                        })
+                    });
+                    const data = await res.json();
+                    showNewChatModal.value = false;
+                    await fetchConversations();
+                    selectConversation(data.id);
+                };
+
+                const sendMessage = async () => {
+                    if (!inputMessage.value.trim() || isGenerating.value) return;
+
+                    const msg = inputMessage.value;
+                    inputMessage.value = "";
+                    isGenerating.value = true;
+                    streamingContent.value = "";
+                    
+                    // Optimistic update
+                    messages.value.push({ role: 'user', content: msg });
+                    await nextTick();
+                    scrollToBottom();
+
+                    const response = await fetch('/api/chat', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            conversation_id: currentId.value,
+                            message: msg
+                        })
+                    });
+
+                    const reader = response.body.getReader();
+                    const decoder = new TextDecoder();
+                    let buffer = "";
+
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+                        
+                        buffer += decoder.decode(value, { stream: true });
+                        const lines = buffer.split('\n');
+                        buffer = lines.pop(); // Keep the last partial line in buffer
+
+                        for (const line of lines) {
+                            if (line.trim().startsWith('data: ')) {
+                                try {
+                                    const data = JSON.parse(line.trim().slice(6));
+                                    if (data.type === 'delta') {
+                                        streamingContent.value += data.content;
+                                        await nextTick();
+                                        scrollToBottom();
+                                    } else if (data.type === 'complete' || data.type === 'stopped') {
+                                        isGenerating.value = false;
+                                        await selectConversation(currentId.value); // Reload to get stable state
+                                        streamingContent.value = "";
+                                        await fetchConversations(); // Update updated_at
+                                    } else if (data.type === 'error') {
+                                        alert("Error: " + data.message);
+                                        isGenerating.value = false;
+                                    }
+                                } catch (e) {
+                                    console.error("Parse SSE error", e, line);
+                                }
+                            }
+                        }
+                    }
+                };
+
+                const stopGeneration = async () => {
+                    await fetch(`/api/chat/stop?conversation_id=${currentId.value}`, { method: 'POST' });
+                    isGenerating.value = false;
+                };
+
+                const forkConversation = async () => {
+                    const newName = prompt("输入新对话名称:", currentConversation.value.name + " (Fork)");
+                    if (!newName) return;
+
+                    const res = await fetch('/api/fork', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            conversation_id: currentId.value,
+                            new_name: newName
+                        })
+                    });
+                    const data = await res.json();
+                    await fetchConversations();
+                    selectConversation(data.id);
+                };
+
+                const deleteConversation = async (id) => {
+                    if (!confirm("确定删除该对话？此操作不可撤销。")) return;
+                    const res = await fetch(`/api/conversations/${id}`, { method: 'DELETE' });
+                    if (res.ok) {
+                        if (currentId.value === id) {
+                            currentId.value = null;
+                            messages.value = [];
+                        }
+                        await fetchConversations();
+                    }
+                };
+
+                const exportMarkdown = async () => {
+                    const res = await fetch(`/api/conversations/${currentId.value}/export`);
+                    const blob = await res.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `${currentId.value}.md`;
+                    a.click();
+                };
+
+                const editName = async () => {
+                    const newName = prompt("修改对话名称:", currentConversation.value.name);
+                    if (!newName || newName === currentConversation.value.name) return;
+
+                    await fetch('/api/conversations/rename', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            conversation_id: currentId.value,
+                            new_name: newName
+                        })
+                    });
+                    await fetchConversations();
+                };
+
+                const updateSystemPrompt = async () => {
+                    await fetch('/api/conversations/system_prompt', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            conversation_id: currentId.value,
+                            new_prompt: systemPromptText.value
+                        })
+                    });
+                    showSystemPromptModal.value = false;
+                    await selectConversation(currentId.value);
+                };
+
+                const startRewrite = async (index) => {
+                    const oldContent = messages.value[index].content;
+                    const newContent = prompt("重写该消息:", oldContent);
+                    if (!newContent || newContent === oldContent) return;
+
+                    isGenerating.value = true;
+                    streamingContent.value = "";
+                    
+                    const response = await fetch('/api/rewrite', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            conversation_id: currentId.value,
+                            index: index,
+                            role: messages.value[index].role,
+                            new_content: newContent
+                        })
+                    });
+
+                    // Handle SSE stream same as sendMessage...
+                    const reader = response.body.getReader();
+                    const decoder = new TextDecoder();
+                    let buffer = "";
+
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+                        
+                        buffer += decoder.decode(value, { stream: true });
+                        const lines = buffer.split('\n');
+                        buffer = lines.pop();
+
+                        for (const line of lines) {
+                            if (line.trim().startsWith('data: ')) {
+                                try {
+                                    const data = JSON.parse(line.trim().slice(6));
+                                    if (data.type === 'delta') {
+                                        streamingContent.value += data.content;
+                                        await nextTick();
+                                        scrollToBottom();
+                                    } else if (data.type === 'complete' || data.type === 'stopped') {
+                                        isGenerating.value = false;
+                                        await selectConversation(currentId.value);
+                                        streamingContent.value = "";
+                                        await fetchConversations();
+                                    }
+                                } catch (e) {
+                                    console.error("Parse rewrite SSE error", e, line);
+                                }
+                            }
+                        }
+                    }
+                };
+
+                const rollbackTo = async (index) => {
+                    if (!confirm("回滚到此处将永久删除后续所有消息，确定继续？")) return;
+                    await fetch('/api/rollback', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            conversation_id: currentId.value,
+                            index: index
+                        })
+                    });
+                    await selectConversation(currentId.value);
+                    await fetchConversations();
+                };
+
+                const renderMarkdown = (text) => {
+                    if (!text) return "";
+                    // Replace mermaid blocks with a placeholder to handle later
+                    const html = md.render(text);
+                    return html;
+                };
+
+                const formatTime = (isoStr) => {
+                    if (!isoStr) return "";
+                    const date = new Date(isoStr);
+                    return date.toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+                };
+
+                const scrollToBottom = () => {
+                    const el = document.querySelector('.chat-area .overflow-y-auto');
+                    if (el) el.scrollTop = el.scrollHeight;
+                };
+
+                onMounted(() => {
+                    fetchConversations();
+                    lucide.createIcons();
+                    
+                    // Mermaid init
+                    mermaid.initialize({ startOnLoad: false, theme: 'default' });
+                });
+
+                // Watch for message changes to re-run lucide and mermaid
+                watch(messages, async () => {
+                    await nextTick();
+                    lucide.createIcons();
+                    
+                    // Render mermaid diagrams
+                    document.querySelectorAll('pre code.language-mermaid').forEach(async (el, i) => {
+                        const code = el.innerText;
+                        const parent = el.parentElement.parentElement;
+                        const id = 'mermaid-' + Date.now() + '-' + i;
+                        try {
+                            const { svg } = await mermaid.render(id, code);
+                            const div = document.createElement('div');
+                            div.className = 'mermaid-container my-4';
+                            div.innerHTML = svg;
+                            parent.innerHTML = '';
+                            parent.appendChild(div);
+                        } catch (err) {
+                            console.error("Mermaid error", err);
+                        }
+                    });
+                }, { deep: true });
+
+                return {
+                    conversations, currentId, messages, streamingContent, inputMessage, 
+                    isGenerating, searchQuery, showNewChatModal, showSystemPromptModal,
+                    systemPromptText, newChatForm, filteredConversations, currentConversation,
+                    selectConversation, createChat, sendMessage, stopGeneration,
+                    forkConversation, deleteConversation, exportMarkdown, editName,
+                    updateSystemPrompt, startRewrite, rollbackTo, renderMarkdown, formatTime
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>

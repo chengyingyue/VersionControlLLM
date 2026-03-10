@@ -48,42 +48,57 @@ user_id: user_01
 ## 4. 前端 UI/UX 设计
 前端采用单页应用（SPA）架构，重点在于流式内容渲染与对话树的线性化展示。
 
-### 4.1 布局规划
+### 4.1 布局规划 (Layout)
 - **侧边栏 (Sidebar)**：
-  - 对话列表：按更新时间排序，显示名称与摘要。
-  - 操作按钮：新建对话、删除对话。
-- **主对话区 (Chat Area)**：
-  - 消息流：按索引渲染 `# Message X` 块。
-  - **流式渲染**：使用 Markdown-it 实时解析 SSE 传回的片段。
-  - **Mermaid 渲染**：检测到代码块类型为 `mermaid` 时，调用 Mermaid.js 进行 SVG 转换。
+  - 对话列表：按更新时间倒序排列，显示名称与创建日期。
+  - 操作按钮：`新建对话` (New Chat)、`删除对话` (Delete Chat)。
+  - 搜索框：根据对话名称实时过滤。
+- **主对话区 (Main Content)**：
+  - **消息流 (Message Stream)**：渲染 `# Message X` 块，User 与 Assistant 消息左右分列（或通过背景色区分）。
+  - **输入框 (Input Area)**：位于底部，支持 `Enter` 发送，`Shift+Enter` 换行。
+  - **状态指示**：生成中显示 Loading/Stop 按钮。
 - **控制栏 (Header/Toolbar)**：
-  - 当前对话名称（点击可重命名）。
-  - **System Prompt 配置**：下拉/弹窗修改该对话的 Message 0。
-  - **版本操作**：Fork（复制当前对话）、Export（复制 Markdown 源码）、Rollback（选择消息索引回退）。
-  - **生成控制**：正在生成时显示“停止”按钮。
+  - 当前对话名称：点击可进行 `Rename`。
+  - **System Prompt 按钮**：点击弹出弹窗，允许修改 Message 0。
+  - **版本操作组**：
+    - `Fork`：复制当前对话。
+    - `Export`：导出 Markdown 源码。
+    - `Rollback`：显示历史列表，选择消息索引进行回滚（截断）。
 
-### 4.2 核心交互
-1. **停止生成**：点击停止 -> 发送 `POST /api/chat/stop` -> 后端截断推理 -> 前端显示“已中止”。
-2. **重写 (Rewrite)**：悬停在历史消息上显示“编辑” -> 修改内容 -> 发送 `POST /api/rewrite` -> 界面截断该消息后的内容并开始流式刷新。
+### 4.2 核心交互逻辑 (Core Interaction Flow)
 
-## 5. 系统架构
-- **前端**：原生 ES Modules + Vue 3（无构建），集成 Markdown-it、Mermaid.js、Highlight.js。
-- **后端**：FastAPI + SSE (Server-Sent Events) 流式推送。
-- **LLM 层**：复用 `llm_client.py`，支持 Mock 打桩和日志记录。
+#### 4.2.1 SSE 流式生成流程图
+```mermaid
+graph TD
+    A[用户点击发送] --> B{当前是否有生成?}
+    B -- 是 --> C[提示停止当前生成]
+    B -- 否 --> D[POST /api/chat]
+    D --> E[前端 EventSource 监听]
+    E --> F[接收 delta 片段]
+    F --> G[实时解析并渲染 Markdown]
+    G --> H{收到 complete/stopped/error?}
+    H -- 否 --> F
+    H -- 是 --> I[更新对话列表并结束生成态]
+```
 
-## 6. API 交互逻辑
-### 6.1 身份校验
-- 使用 `SessionMiddleware` 存储 `user_id`。
-- 接口通过 `Depends(get_current_user)` 进行权限拦截，确保用户只能访问自己的目录。
+#### 4.2.2 历史重写流程图
+```mermaid
+graph TD
+    A[点击消息重写按钮] --> B[弹出编辑框/直接编辑]
+    B --> C[用户确认提交]
+    C --> D[POST /api/rewrite]
+    D --> E[前端清除该消息后的所有后续消息]
+    E --> F[前端开启 SSE 监听生成]
+    F --> G[接收并显示新内容]
+```
 
-### 6.2 核心端点
-- `GET /api/conversations`：列表展示（带元数据）。
-- `POST /api/chat`：追加消息并流式生成。
-- `POST /api/rewrite`：截断到 index-1 -> 替换 index 内容 -> 重新生成。
-- `POST /api/fork`：复制 .md 文件 -> 赋予新 ID。
-- `POST /api/chat/stop`：中止当前对话的生成任务。
-- `POST /api/conversations/rename`：修改 Frontmatter 中的名称。
-- `POST /api/conversations/system_prompt`：针对当前对话修改 Message 0 的内容。
+## 5. 技术栈选择
+- **前端**：Vue 3 (CDN), Tailwind CSS (CDN), `markdown-it` (渲染), `mermaid.js` (图表), `highlight.js` (代码高亮).
+- **后端**：FastAPI, SSE, `storage_manager.py`.
+
+## 6. API 接口扩展 (前端配套)
+- **静态资源托管**：后端需要增加 `StaticFiles` 挂载，将前端 HTML/JS 暴露。
+- **对话列表检索**：优化 `GET /api/conversations`，返回更丰富的元数据以支持侧边栏显示。
 
 ## 7. 演进路线
 - **阶段一**：完成一文件一对话存储、SSE 生成通路、Fork/Rewrite 核心逻辑。
