@@ -616,15 +616,15 @@
                     // Render mermaid diagrams
                     document.querySelectorAll('pre code.language-mermaid').forEach(async (el, i) => {
                         const code = el.innerText;
-                        const parent = el.parentElement.parentElement;
+                        const pre = el.parentElement;
+                        const container = pre.parentElement;
                         const id = 'mermaid-' + Date.now() + '-' + i;
                         try {
                             const { svg } = await mermaid.render(id, code);
                             const div = document.createElement('div');
                             div.className = 'mermaid-container my-4';
                             div.innerHTML = svg;
-                            parent.innerHTML = '';
-                            parent.appendChild(div);
+                            container.replaceChild(div, pre);
                         } catch (err) {
                             console.error("Mermaid error", err);
                         }
