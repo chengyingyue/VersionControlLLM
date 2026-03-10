@@ -34,9 +34,11 @@
         <aside class="sidebar bg-white border-r border-gray-200 flex flex-col">
             <div class="p-4 border-b border-gray-200 flex justify-between items-center">
                 <h1 class="text-xl font-bold text-blue-600">VC-LLM</h1>
-                <button @click="showNewChatModal = true" class="p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100">
-                    <i data-lucide="plus"></i>
-                </button>
+                <div class="flex gap-2">
+                    <button @click="showNewChatModal = true" class="p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100">
+                        <i data-lucide="plus"></i>
+                    </button>
+                </div>
             </div>
             <div class="p-4">
                 <input v-model="searchQuery" type="text" placeholder="搜索对话..." class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
@@ -56,6 +58,19 @@
                         <span class="bg-gray-200 px-1 rounded">{{ conv.id }}</span>
                     </div>
                 </div>
+            </div>
+            
+            <!-- User Profile & Logout -->
+            <div class="p-4 border-t border-gray-200 bg-gray-50 flex items-center justify-between">
+                <div class="flex items-center gap-2 overflow-hidden">
+                    <div class="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-bold shrink-0">
+                        {{ currentUser.charAt(0).toUpperCase() }}
+                    </div>
+                    <span class="text-sm font-medium text-gray-700 truncate">{{ currentUser }}</span>
+                </div>
+                <button @click="logout" class="p-2 text-gray-400 hover:text-red-500 transition-colors" title="登出">
+                    <i data-lucide="log-out" class="w-5 h-5"></i>
+                </button>
             </div>
         </aside>
 
@@ -141,6 +156,35 @@
         </main>
 
         <!-- Modals -->
+        <!-- Login Modal (Overlay) -->
+        <div v-if="!isLoggedIn" class="fixed inset-0 bg-gray-900 flex items-center justify-center z-[100]">
+            <div class="bg-white rounded-2xl shadow-2xl w-[400px] p-8 text-center">
+                <div class="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-6">
+                    <i data-lucide="user" class="w-8 h-8"></i>
+                </div>
+                <h2 class="text-2xl font-bold text-gray-800 mb-2">欢迎回来</h2>
+                <p class="text-gray-500 mb-8">请输入您的工号或姓名登录系统</p>
+                
+                <div class="space-y-4">
+                    <input 
+                        v-model="loginUserId" 
+                        @keyup.enter="login"
+                        type="text" 
+                        placeholder="工号 / 姓名" 
+                        class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                    >
+                    <button 
+                        @click="login" 
+                        :disabled="!loginUserId.trim()"
+                        class="w-full py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 disabled:bg-gray-300 transition-colors"
+                    >
+                        进入系统
+                    </button>
+                </div>
+                <p class="mt-6 text-xs text-gray-400">数据将按用户 ID 进行物理隔离存储</p>
+            </div>
+        </div>
+
         <!-- New Chat Modal -->
         <div v-if="showNewChatModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
             <div class="bg-white rounded-xl shadow-xl w-[450px] overflow-hidden">
@@ -186,6 +230,10 @@
 
         createApp({
             setup() {
+                const isLoggedIn = ref(false);
+                const currentUser = ref("");
+                const loginUserId = ref("");
+
                 const conversations = ref([]);
                 const currentId = ref(null);
                 const messages = ref([]);
@@ -223,14 +271,74 @@
                 });
 
                 // --- Methods ---
+                const checkAuth = async () => {
+                    try {
+                        const res = await fetch('/api/me');
+                        if (res.ok) {
+                            const data = await res.json();
+                            currentUser.value = data.user_id;
+                            isLoggedIn.value = true;
+                            fetchConversations();
+                        } else {
+                            isLoggedIn.value = false;
+                        }
+                    } catch (e) {
+                        isLoggedIn.value = false;
+                    }
+                };
+
+                const login = async () => {
+                    if (!loginUserId.value.trim()) return;
+                    try {
+                        const res = await fetch('/api/login', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ user_id: loginUserId.value })
+                        });
+                        if (res.ok) {
+                            const data = await res.json();
+                            currentUser.value = data.user_id;
+                            isLoggedIn.value = true;
+                            loginUserId.value = "";
+                            fetchConversations();
+                            await nextTick();
+                            lucide.createIcons();
+                        } else {
+                            alert("登录失败");
+                        }
+                    } catch (e) {
+                        alert("登录出错");
+                    }
+                };
+
+                const logout = async () => {
+                    await fetch('/api/logout', { method: 'POST' });
+                    isLoggedIn.value = false;
+                    currentUser.value = "";
+                    conversations.value = [];
+                    currentId.value = null;
+                    messages.value = [];
+                    await nextTick();
+                    lucide.createIcons();
+                };
+
                 const fetchConversations = async () => {
                     const res = await fetch('/api/conversations');
+                    if (res.status === 401) {
+                        isLoggedIn.value = false;
+                        return;
+                    }
                     conversations.value = await res.json();
                 };
 
                 const selectConversation = async (id) => {
+                    if (!id) return;
                     currentId.value = id;
                     const res = await fetch(`/api/conversations/${id}`);
+                    if (res.status === 401) {
+                        isLoggedIn.value = false;
+                        return;
+                    }
                     const data = await res.json();
                     messages.value = data.messages;
                     
@@ -249,10 +357,15 @@
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
-                            name: newChatForm.name,
-                            system_prompt: newChatForm.systemPrompt
+                            name: newChatForm.value.name,
+                            system_prompt: newChatForm.value.systemPrompt
                         })
                     });
+                    if (!res.ok) {
+                        const err = await res.json();
+                        alert("创建失败: " + JSON.stringify(err.detail));
+                        return;
+                    }
                     const data = await res.json();
                     showNewChatModal.value = false;
                     await fetchConversations();
@@ -477,7 +590,7 @@
                 };
 
                 onMounted(() => {
-                    fetchConversations();
+                    checkAuth();
                     lucide.createIcons();
                     
                     // Mermaid init
@@ -508,6 +621,7 @@
                 }, { deep: true });
 
                 return {
+                    isLoggedIn, currentUser, loginUserId, checkAuth, login, logout,
                     conversations, currentId, messages, streamingContent, inputMessage, 
                     isGenerating, searchQuery, showNewChatModal, showSystemPromptModal,
                     systemPromptText, newChatForm, filteredConversations, currentConversation,
