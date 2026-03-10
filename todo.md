@@ -14,15 +14,15 @@
   - [x] **中止生成**：在 `chat` 过程中调用 `/api/chat/stop`，验证流是否停止且文件保存了 `[Stopped]` 标记。
   - [x] **改名与导出**：验证 `/api/conversations/rename` 后文件元数据是否更新，`/api/conversations/{id}/export` 是否返回完整源码。
 
-- **阶段二：前端展示与渲染 (Next)**
-  - [ ] 搭建前端基础骨架：使用 Vue 3 + Tailwind CSS（CDN 引入，无需构建）。
-  - [ ] 对话列表组件：实现侧边栏，支持加载、搜索、切换对话。
-  - [ ] 消息流渲染：集成 `markdown-it` 实现流式文本解析，集成 `mermaid.js`。
-  - [ ] 实时生成交互：处理 SSE 事件（delta, complete, stopped, error）。
-  - [ ] 版本操作 UI：实现 Fork、Rename、Export、Modify System Prompt 的交互弹窗。
-  - [ ] 历史操控：在消息块上实现“从此处重写”按钮逻辑。
+- **阶段二：前端展示与渲染 (Done)**
+  - [x] 搭建前端基础骨架：使用 Vue 3 + Tailwind CSS（CDN 引入，无需构建）。
+  - [x] 对话列表组件：实现侧边栏，支持加载、搜索、切换对话。
+  - [x] 消息流渲染：集成 `markdown-it` 实现流式文本解析，集成 `mermaid.js`。
+  - [x] 实时生成交互：处理 SSE 事件（delta, complete, stopped, error）。
+  - [x] 版本操作 UI：实现 Fork、Rename、Export、Modify System Prompt 的交互弹窗。
+  - [x] 历史操控：在消息块上实现“从此处重写”按钮逻辑。
 
-- **阶段三：用户系统与隔离**
+- **阶段三：用户系统与隔离 (Next)**
   - [ ] 实现登录端点：支持工号/姓名登录，并在 Session 中记录 `user_id`。
   - [ ] 目录隔离：确保 `storage_manager` 根据当前 Session 的 `user_id` 访问对应目录。
   - [ ] 权限校验：为所有敏感端点增加 `get_current_user` 依赖项。

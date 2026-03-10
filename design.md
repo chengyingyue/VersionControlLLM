@@ -101,6 +101,6 @@ graph TD
 - **对话列表检索**：优化 `GET /api/conversations`，返回更丰富的元数据以支持侧边栏显示。
 
 ## 7. 演进路线
-- **阶段一**：完成一文件一对话存储、SSE 生成通路、Fork/Rewrite 核心逻辑。
-- **阶段二**：前端 UI 开发（Vue 3 + Tailwind），集成 Markdown/Mermaid 渲染。
-- **阶段三**：引入用户登录界面与多用户隔离，完善 Session 管理。
+- **阶段一 (Done)**：完成一文件一对话存储、SSE 生成通路、Fork/Rewrite 核心逻辑。
+- **阶段二 (Done)**：前端 UI 开发（Vue 3 + Tailwind），集成 Markdown/Mermaid 渲染。
+- **阶段三 (Next)**：引入用户登录界面与多用户隔离，完善 Session 管理。
