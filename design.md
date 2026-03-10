@@ -12,8 +12,8 @@
   - **登录机制**：支持多用户登录（通过姓名/工号）。
   - **目录隔离**：数据按 `data/conversations/{user_id}/` 目录物理隔离。
 - **Markdown 与 Mermaid 渲染**：
-  - 前端流式渲染 Markdown 内容。
-  - 支持 Mermaid 代码块实时转化为图表。
+  - 前端流式渲染 Markdown 内容，支持 Mermaid 代码块的即时渲染。
+  - 支持 Mermaid 代码块实时转化为图表，并提供点击全屏查看功能。
 - **辅助功能**：
   - **停止生成**：生成过程中支持前端发送中止信号。
   - **导出/复制**：提供获取完整 Markdown 源码的端点。
@@ -54,7 +54,7 @@ user_id: user_01
   - 操作按钮：`新建对话` (New Chat)、`删除对话` (Delete Chat)。
   - 搜索框：根据对话名称实时过滤。
 - **主对话区 (Main Content)**：
-  - **消息流 (Message Stream)**：渲染 `# Message X` 块，User 与 Assistant 消息左右分列（或通过背景色区分）。
+  - **消息流 (Message Stream)**：渲染 `# Message X` 块，User 与 Assistant 消息左右分列（或通过背景色区分）。支持 Mermaid 图表的即时渲染和点击全屏查看。
   - **输入框 (Input Area)**：位于底部，支持 `Enter` 发送，`Shift+Enter` 换行。
   - **状态指示**：生成中显示 Loading/Stop 按钮。
 - **控制栏 (Header/Toolbar)**：

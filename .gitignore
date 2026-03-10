@@ -5,3 +5,4 @@ __pycache__/
 data/conversations/debug_user/
 data/mock_responses/
 data/conversations/
+app/core/log/
