@@ -4,3 +4,4 @@ __pycache__/
 .vscode/
 data/conversations/debug_user/
 data/mock_responses/
+data/conversations/

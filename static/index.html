@@ -304,7 +304,18 @@
                             await nextTick();
                             lucide.createIcons();
                         } else {
-                            alert("登录失败");
+                            try {
+                                const err = await res.json();
+                                if (res.status === 403) {
+                                    alert("登录失败：该用户不在白名单");
+                                } else if (err && err.detail) {
+                                    alert("登录失败：" + err.detail);
+                                } else {
+                                    alert("登录失败");
+                                }
+                            } catch {
+                                alert("登录失败");
+                            }
                         }
                     } catch (e) {
                         alert("登录出错");

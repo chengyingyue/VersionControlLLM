@@ -61,6 +61,32 @@ async def read_index():
 
 # --- Authentication Dependencies ---
 
+WHITELIST_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "white_list.json")
+
+def is_user_allowed(user_id: str) -> bool:
+    """
+    读取项目根目录的 white_list.json，校验 user_id 是否在白名单内。
+    支持两种格式：
+    1) 纯数组: ["user_a", "user_b"]
+    2) 包装对象: {"users": ["user_a", "user_b"]}
+    """
+    try:
+        if not os.path.exists(WHITELIST_PATH):
+            logging.warning(f"Whitelist file not found: {WHITELIST_PATH}")
+            return False
+        with open(WHITELIST_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        if isinstance(data, list):
+            allowed = set(str(x).strip() for x in data)
+        elif isinstance(data, dict) and "users" in data:
+            allowed = set(str(x).strip() for x in data.get("users", []))
+        else:
+            allowed = set()
+        return user_id.strip() in allowed
+    except Exception as e:
+        logging.error(f"Failed to read whitelist: {e}")
+        return False
+
 async def get_current_user(request: Request) -> str:
     """
     根据 Session 获取当前登录用户 ID。
@@ -100,6 +126,9 @@ async def login(request: Request, login_data: LoginRequest):
     user_id = login_data.user_id.strip()
     if not user_id:
         raise HTTPException(status_code=400, detail="User ID cannot be empty")
+    if not is_user_allowed(user_id):
+        logging.warning(f"Login rejected: user '{user_id}' not in whitelist")
+        raise HTTPException(status_code=403, detail="User not whitelisted")
     
     request.session["user_id"] = user_id
     logging.info(f"User logged in: {user_id}")
