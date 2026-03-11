@@ -241,13 +241,15 @@
             </div>
         </div>
         <div v-if="showDiagramModal" class="fixed inset-0 bg-black bg-opacity-80 z-[110]">
-            <div class="absolute inset-0 flex items-center justify-center p-6" @click.self="closeDiagramModal">
-                <div class="relative bg-white rounded-xl shadow-2xl max-w-[95vw] max-h-[90vh] overflow-auto">
-                    <button @click="closeDiagramModal" class="absolute top-3 right-3 p-2 bg-gray-100 rounded-full hover:bg-gray-200">
-                        <i data-lucide="x" class="w-5 h-5"></i>
-                    </button>
-                    <div class="p-4">
-                        <div class="mermaid-container max-w-[85vw] max-h-[80vh] overflow-auto" v-html="diagramModalSvg"></div>
+            <div class="absolute inset-0 flex items-center justify-center p-4 sm:p-6" @click.self="closeDiagramModal">
+                <div class="relative bg-white rounded-xl shadow-2xl w-full h-full flex flex-col">
+                    <div class="flex-shrink-0 flex justify-end p-2 border-b">
+                        <button @click="closeDiagramModal" class="p-2 bg-gray-100 rounded-full hover:bg-gray-200">
+                            <i data-lucide="x" class="w-5 h-5"></i>
+                        </button>
+                    </div>
+                    <div class="flex-1 p-4 overflow-auto">
+                        <div ref="diagramContainerRef" class="w-full h-full flex justify-center items-center" v-html="diagramModalSvg"></div>
                     </div>
                 </div>
             </div>
@@ -280,6 +282,8 @@
                 });
                 const showDiagramModal = ref(false);
                 const diagramModalSvg = ref("");
+                const diagramScale = ref(1.0); // Initial scale for diagram zoom
+                const diagramContainerRef = ref(null); // Ref for the mermaid container in modal
 
                 const md = window.markdownit({
                     highlight: function (str, lang) {
@@ -304,14 +308,45 @@
                 const openDiagramModal = (svg) => {
                     diagramModalSvg.value = svg;
                     showDiagramModal.value = true;
+                    diagramScale.value = 1.0; // Reset scale on open
                     nextTick(() => {
                         lucide.createIcons();
+                        if (diagramContainerRef.value) {
+                            diagramContainerRef.value.addEventListener('wheel', handleDiagramWheel, { passive: false });
+                        }
                     });
                 };
                 const closeDiagramModal = () => {
+                    if (diagramContainerRef.value) {
+                        diagramContainerRef.value.removeEventListener('wheel', handleDiagramWheel);
+                    }
                     showDiagramModal.value = false;
                     diagramModalSvg.value = "";
+                    diagramScale.value = 1.0; // Reset scale on close
                 };
+
+                const handleDiagramWheel = (event) => {
+                    event.preventDefault(); // Prevent page scrolling
+                    const scaleAmount = 0.1; // How much to zoom in/out
+                    if (event.deltaY < 0) {
+                        // Zoom in
+                        diagramScale.value += scaleAmount;
+                    } else {
+                        // Zoom out
+                        diagramScale.value = Math.max(0.1, diagramScale.value - scaleAmount); // Prevent zooming out too much
+                    }
+                };
+
+                watch([diagramScale, diagramModalSvg], () => {
+                    nextTick(() => {
+                        if (!diagramContainerRef.value) return;
+                        const svgElement = diagramContainerRef.value.querySelector('svg');
+                        if (svgElement) {
+                            svgElement.style.transform = `scale(${diagramScale.value})`;
+                            svgElement.style.transformOrigin = 'center center';
+                        }
+                    });
+                });
 
                 // --- Methods ---
                 const checkAuth = async () => {
@@ -785,6 +820,7 @@
                     copyMessage, copyStreaming,
                     updateSystemPrompt, startRewrite, rollbackTo, renderMarkdown, formatTime, streamingContainer,
                     showDiagramModal, diagramModalSvg, closeDiagramModal,
+                    diagramScale, diagramContainerRef,
                     handleEnter
                 };
             }
