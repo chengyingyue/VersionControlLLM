@@ -57,6 +57,10 @@ user_id: user_01
   - **消息流 (Message Stream)**：渲染 `# Message X` 块，User 与 Assistant 消息左右分列（或通过背景色区分）。支持 Mermaid 图表的即时渲染和点击全屏查看。
   - **输入框 (Input Area)**：位于底部，支持 `Enter` 发送，`Shift+Enter` 换行。
   - **状态指示**：生成中显示 Loading/Stop 按钮。
+  - **复制能力 (Copy)**：
+    - **消息复制**：每条消息气泡底部提供复制图标按钮，复制该条消息的原始 Markdown。
+    - **代码块复制**：每个代码块右上角提供复制图标按钮，复制该代码块内容。
+    - **反馈方式**：复制成功/失败不使用弹窗，以轻量视觉反馈（按钮短暂变色/悬浮提示）提示状态。
 - **控制栏 (Header/Toolbar)**：
   - 当前对话名称：点击可进行 `Rename`。
   - **System Prompt 按钮**：点击弹出弹窗，允许修改 Message 0。
