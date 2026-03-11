@@ -13,15 +13,22 @@
     <!-- Mermaid CDN -->
     <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
     <!-- Highlight.js CDN -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
         .sidebar { width: 300px; }
         .chat-area { flex: 1; }
-        .markdown-body pre { background-color: #1e1e1e; padding: 1rem; border-radius: 0.5rem; overflow-x: auto; }
+        .markdown-body pre { padding: 1rem; border-radius: 0.5rem; overflow-x: auto; background: #f6f8fa; border: 1px solid #e5e7eb; }
         .markdown-body code { font-family: 'Fira Code', monospace; }
+        .markdown-body :not(pre) > code { background: #eef2ff; color: #111827; padding: 0.1rem 0.35rem; border-radius: 0.35rem; border: 1px solid #e5e7eb; }
+        .markdown-body pre code { background: transparent; border: 0; padding: 0; color: inherit; }
+        .markdown-body pre.code-block { position: relative; padding-top: 2.5rem; }
+        .markdown-body pre.code-block .code-copy-btn { position: absolute; right: 0.5rem; top: 0.5rem; padding: 0.375rem; border-radius: 0.5rem; background: rgba(255, 255, 255, 0.9); border: 1px solid #e5e7eb; color: #374151; }
+        .markdown-body pre.code-block .code-copy-btn:hover { background: rgba(255, 255, 255, 1); }
+        .copy-btn-success { background: #dcfce7 !important; border-color: #86efac !important; color: #166534 !important; }
+        .copy-btn-fail { background: #fee2e2 !important; border-color: #fecaca !important; color: #991b1b !important; }
         .message-user { align-self: flex-end; background-color: #3b82f6; color: white; border-radius: 1rem 1rem 0 1rem; }
         .message-assistant { align-self: flex-start; background-color: #f3f4f6; color: #1f2937; border-radius: 1rem 1rem 1rem 0; }
         .mermaid-container svg { max-width: 100%; height: auto; }
@@ -107,6 +114,11 @@
                          :class="['flex flex-col max-w-[85%] group', msg.role === 'user' ? 'ml-auto items-end' : 'mr-auto items-start']">
                         <div v-if="index > 0" :class="['px-4 py-3 rounded-2xl markdown-body relative', msg.role === 'user' ? 'message-user' : 'message-assistant']">
                             <div v-html="renderMarkdown(msg.content)"></div>
+                            <div class="mt-2 flex justify-end">
+                                <button @click="copyMessage(index, $event)" class="p-1.5 bg-gray-200 text-gray-700 rounded hover:bg-gray-300" title="复制该消息">
+                                    <i data-lucide="copy" class="w-4 h-4"></i>
+                                </button>
+                            </div>
                             <!-- Action Buttons on Hover -->
                             <div :class="['absolute top-0 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2 p-1', msg.role === 'user' ? 'right-full mr-2' : 'left-full ml-2']">
                                 <button @click="startRewrite(index)" class="p-1 bg-white border border-gray-200 rounded shadow-sm hover:bg-gray-50 text-gray-600" title="从此处重写">
@@ -123,6 +135,11 @@
                     <div v-if="streamingContent" class="flex flex-col max-w-[85%] mr-auto items-start">
                         <div class="px-4 py-3 rounded-2xl bg-gray-100 text-gray-800 markdown-body" ref="streamingContainer">
                             <div v-html="renderMarkdown(streamingContent)"></div>
+                            <div class="mt-2 flex justify-end">
+                                <button @click="copyStreaming($event)" class="p-1.5 bg-gray-200 text-gray-700 rounded hover:bg-gray-300" title="复制该消息">
+                                    <i data-lucide="copy" class="w-4 h-4"></i>
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </template>
@@ -271,7 +288,7 @@
                                 return hljs.highlight(str, { language: lang }).value;
                             } catch (__) {}
                         }
-                        return ''; // use external default escaping
+                        return '';
                     }
                 });
 
@@ -512,6 +529,41 @@
                     a.click();
                 };
 
+                const markCopyFeedback = (buttonEl, ok) => {
+                    if (!buttonEl) return;
+                    const cls = ok ? 'copy-btn-success' : 'copy-btn-fail';
+                    buttonEl.classList.add(cls);
+                    const oldTitle = buttonEl.getAttribute('title') || '';
+                    buttonEl.setAttribute('title', ok ? '已复制' : '复制失败');
+                    setTimeout(() => {
+                        buttonEl.classList.remove(cls);
+                        buttonEl.setAttribute('title', oldTitle);
+                    }, 900);
+                };
+
+                const copyMessage = async (index, evt) => {
+                    const msg = messages.value[index];
+                    if (!msg || !msg.content) return;
+                    try {
+                        await navigator.clipboard.writeText(msg.content);
+                        markCopyFeedback(evt?.currentTarget, true);
+                    } catch (error) {
+                        console.error("复制消息失败:", error);
+                        markCopyFeedback(evt?.currentTarget, false);
+                    }
+                };
+
+                const copyStreaming = async (evt) => {
+                    if (!streamingContent.value) return;
+                    try {
+                        await navigator.clipboard.writeText(streamingContent.value);
+                        markCopyFeedback(evt?.currentTarget, true);
+                    } catch (error) {
+                        console.error("复制消息失败:", error);
+                        markCopyFeedback(evt?.currentTarget, false);
+                    }
+                };
+
                 const editName = async () => {
                     const newName = prompt("修改对话名称:", currentConversation.value.name);
                     if (!newName || newName === currentConversation.value.name) return;
@@ -610,9 +662,36 @@
 
                 const renderMarkdown = (text) => {
                     if (!text) return "";
-                    // Replace mermaid blocks with a placeholder to handle later
-                    const html = md.render(text);
-                    return html;
+                    return md.render(text);
+                };
+
+                const enhanceCodeBlocks = (rootEl) => {
+                    if (!rootEl) return;
+                    const pres = rootEl.querySelectorAll('pre');
+                    pres.forEach((pre) => {
+                        if (pre.classList.contains('code-block')) return;
+                        const code = pre.querySelector('code');
+                        if (!code) return;
+                        if (code.classList.contains('language-mermaid')) return;
+                        if (pre.querySelector('.code-copy-btn')) return;
+
+                        pre.classList.add('code-block');
+                        const btn = document.createElement('button');
+                        btn.type = 'button';
+                        btn.className = 'code-copy-btn';
+                        btn.setAttribute('title', '复制代码块');
+                        btn.innerHTML = '<i data-lucide="copy" class="w-4 h-4"></i>';
+                        btn.addEventListener('click', async () => {
+                            try {
+                                await navigator.clipboard.writeText(code.innerText);
+                                markCopyFeedback(btn, true);
+                            } catch (error) {
+                                console.error("复制代码块失败:", error);
+                                markCopyFeedback(btn, false);
+                            }
+                        });
+                        pre.prepend(btn);
+                    });
                 };
 
                 const formatTime = (isoStr) => {
@@ -640,6 +719,7 @@
                 // Watch for message changes to re-run lucide and mermaid
                 watch(messages, async () => {
                     await nextTick();
+                    enhanceCodeBlocks(document.querySelector('.chat-area .overflow-y-auto'));
                     lucide.createIcons();
                     
                     // Render mermaid diagrams
@@ -664,6 +744,8 @@
                 // Instant render Mermaid for streaming content
                 watch(streamingContent, async () => {
                     await nextTick();
+                    if (streamingContainer.value) enhanceCodeBlocks(streamingContainer.value);
+                    lucide.createIcons();
                     if (!streamingContainer.value) return;
                     const nodes = streamingContainer.value.querySelectorAll('pre code.language-mermaid');
                     nodes.forEach(async (el, i) => {
@@ -682,7 +764,7 @@
                             console.error("Mermaid error", err);
                         }
                     });
-                });
+                }, { deep: true });
 
                 return {
                     isLoggedIn, currentUser, loginUserId, checkAuth, login, logout,
@@ -691,6 +773,7 @@
                     systemPromptText, newChatForm, filteredConversations, currentConversation,
                     selectConversation, createChat, sendMessage, stopGeneration,
                     forkConversation, deleteConversation, exportMarkdown, editName,
+                    copyMessage, copyStreaming,
                     updateSystemPrompt, startRewrite, rollbackTo, renderMarkdown, formatTime, streamingContainer,
                     showDiagramModal, diagramModalSvg, closeDiagramModal
                 };
