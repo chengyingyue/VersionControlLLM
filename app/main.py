@@ -61,7 +61,7 @@ async def read_index():
 
 # --- Authentication Dependencies ---
 
-WHITELIST_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "white_list.json")
+WHITELIST_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data/white_list.json")
 
 def is_user_allowed(user_id: str) -> bool:
     """

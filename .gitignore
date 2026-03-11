@@ -7,3 +7,4 @@ data/mock_responses/
 data/conversations/
 app/core/log/
 .draft/
+data/
