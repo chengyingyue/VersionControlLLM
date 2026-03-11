@@ -2,7 +2,6 @@ __pycache__/
 .env
 .venv/
 .vscode/
-data/conversations/debug_user/
-data/mock_responses/
-data/conversations/
+data
 app/core/log/
+.draft
