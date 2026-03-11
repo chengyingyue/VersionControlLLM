@@ -9,18 +9,18 @@
     <!-- Vue 3 CDN -->
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <!-- Markdown-it CDN -->
-    <script src="https://cdn.jsdelivr.net/npm/markdown-it/dist/markdown-it.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/markdown-it/14.1.0/markdown-it.min.js"></script>
     <!-- Mermaid CDN -->
-    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.9.1/mermaid.min.js"></script>
     <!-- Highlight.js CDN -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
         .sidebar { width: 300px; }
         .chat-area { flex: 1; }
-        .markdown-body pre { background-color: #1e1e1e; padding: 1rem; border-radius: 0.5rem; overflow-x: auto; }
+        .markdown-body pre { padding: 1rem; border-radius: 0.5rem; overflow-x: auto; }
         .markdown-body code { font-family: 'Fira Code', monospace; }
         .message-user { align-self: flex-end; background-color: #3b82f6; color: white; border-radius: 1rem 1rem 0 1rem; }
         .message-assistant { align-self: flex-start; background-color: #f3f4f6; color: #1f2937; border-radius: 1rem 1rem 1rem 0; }
@@ -107,6 +107,11 @@
                          :class="['flex flex-col max-w-[85%] group', msg.role === 'user' ? 'ml-auto items-end' : 'mr-auto items-start']">
                         <div v-if="index > 0" :class="['px-4 py-3 rounded-2xl markdown-body relative', msg.role === 'user' ? 'message-user' : 'message-assistant']">
                             <div v-html="renderMarkdown(msg.content)"></div>
+                            <div class="mt-2 flex justify-end">
+                                <button @click="copyMessage(index)" class="p-1.5 bg-gray-200 text-gray-700 rounded hover:bg-gray-300" title="复制该消息">
+                                    <i data-lucide="copy" class="w-4 h-4"></i>
+                                </button>
+                            </div>
                             <!-- Action Buttons on Hover -->
                             <div :class="['absolute top-0 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2 p-1', msg.role === 'user' ? 'right-full mr-2' : 'left-full ml-2']">
                                 <button @click="startRewrite(index)" class="p-1 bg-white border border-gray-200 rounded shadow-sm hover:bg-gray-50 text-gray-600" title="从此处重写">
@@ -123,6 +128,11 @@
                     <div v-if="streamingContent" class="flex flex-col max-w-[85%] mr-auto items-start">
                         <div class="px-4 py-3 rounded-2xl bg-gray-100 text-gray-800 markdown-body" ref="streamingContainer">
                             <div v-html="renderMarkdown(streamingContent)"></div>
+                            <div class="mt-2 flex justify-end">
+                                <button @click="copyStreaming" class="p-1.5 bg-gray-200 text-gray-700 rounded hover:bg-gray-300" title="复制该消息">
+                                    <i data-lucide="copy" class="w-4 h-4"></i>
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </template>
@@ -264,16 +274,27 @@
                 const showDiagramModal = ref(false);
                 const diagramModalSvg = ref("");
 
-                const md = window.markdownit({
-                    highlight: function (str, lang) {
-                        if (lang && hljs.getLanguage(lang)) {
-                            try {
-                                return hljs.highlight(str, { language: lang }).value;
-                            } catch (__) {}
+                const escapeHtml = (s) => {
+                    return (s ?? "")
+                        .replaceAll("&", "&amp;")
+                        .replaceAll("<", "&lt;")
+                        .replaceAll(">", "&gt;")
+                        .replaceAll('"', "&quot;")
+                        .replaceAll("'", "&#39;");
+                };
+
+                const md = typeof window.markdownit === "function"
+                    ? window.markdownit({
+                        highlight: function (str, lang) {
+                            if (lang && hljs.getLanguage(lang)) {
+                                try {
+                                    return hljs.highlight(str, { language: lang }).value;
+                                } catch (__) {}
+                            }
+                            return '';
                         }
-                        return ''; // use external default escaping
-                    }
-                });
+                    })
+                    : { render: (text) => `<pre><code>${escapeHtml(text)}</code></pre>` };
 
                 // --- Computed ---
                 const filteredConversations = computed(() => {
@@ -512,6 +533,29 @@
                     a.click();
                 };
 
+                const copyMessage = async (index) => {
+                    const msg = messages.value[index];
+                    if (!msg || !msg.content) return;
+                    try {
+                        await navigator.clipboard.writeText(msg.content);
+                        alert("该消息的 Markdown 已复制！");
+                    } catch (error) {
+                        console.error("复制消息失败:", error);
+                        alert("复制失败，请检查浏览器权限或手动复制。");
+                    }
+                };
+
+                const copyStreaming = async () => {
+                    if (!streamingContent.value) return;
+                    try {
+                        await navigator.clipboard.writeText(streamingContent.value);
+                        alert("该消息的 Markdown 已复制！");
+                    } catch (error) {
+                        console.error("复制消息失败:", error);
+                        alert("复制失败，请检查浏览器权限或手动复制。");
+                    }
+                };
+
                 const editName = async () => {
                     const newName = prompt("修改对话名称:", currentConversation.value.name);
                     if (!newName || newName === currentConversation.value.name) return;
@@ -610,9 +654,7 @@
 
                 const renderMarkdown = (text) => {
                     if (!text) return "";
-                    // Replace mermaid blocks with a placeholder to handle later
-                    const html = md.render(text);
-                    return html;
+                    return md.render(text);
                 };
 
                 const formatTime = (isoStr) => {
@@ -631,7 +673,9 @@
                     lucide.createIcons();
                     
                     // Mermaid init
-                    mermaid.initialize({ startOnLoad: false, theme: 'default' });
+                    if (window.mermaid && typeof window.mermaid.initialize === "function") {
+                        mermaid.initialize({ startOnLoad: false, theme: 'default' });
+                    }
                     window.addEventListener('keydown', (e) => {
                         if (e.key === 'Escape' && showDiagramModal.value) closeDiagramModal();
                     });
@@ -641,6 +685,7 @@
                 watch(messages, async () => {
                     await nextTick();
                     lucide.createIcons();
+                    if (!window.mermaid || typeof window.mermaid.render !== "function") return;
                     
                     // Render mermaid diagrams
                     document.querySelectorAll('pre code.language-mermaid').forEach(async (el, i) => {
@@ -664,6 +709,8 @@
                 // Instant render Mermaid for streaming content
                 watch(streamingContent, async () => {
                     await nextTick();
+                    lucide.createIcons();
+                    if (!window.mermaid || typeof window.mermaid.render !== "function") return;
                     if (!streamingContainer.value) return;
                     const nodes = streamingContainer.value.querySelectorAll('pre code.language-mermaid');
                     nodes.forEach(async (el, i) => {
@@ -682,7 +729,7 @@
                             console.error("Mermaid error", err);
                         }
                     });
-                });
+                }, { deep: true });
 
                 return {
                     isLoggedIn, currentUser, loginUserId, checkAuth, login, logout,
@@ -691,6 +738,7 @@
                     systemPromptText, newChatForm, filteredConversations, currentConversation,
                     selectConversation, createChat, sendMessage, stopGeneration,
                     forkConversation, deleteConversation, exportMarkdown, editName,
+                    copyMessage, copyStreaming,
                     updateSystemPrompt, startRewrite, rollbackTo, renderMarkdown, formatTime, streamingContainer,
                     showDiagramModal, diagramModalSvg, closeDiagramModal
                 };
