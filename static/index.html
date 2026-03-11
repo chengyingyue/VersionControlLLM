@@ -155,7 +155,7 @@
                     </div>
                     <textarea 
                         v-model="inputMessage" 
-                        @keydown.enter.prevent="sendMessage"
+                        @keydown.enter="handleEnter"
                         :disabled="isGenerating"
                         placeholder="输入消息，Shift+Enter 换行..."
                         class="w-full rounded-xl border border-gray-300 px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none resize-none min-h-[56px] max-h-48 disabled:bg-gray-100"
@@ -485,6 +485,15 @@
                     }
                 };
 
+                const handleEnter = (event) => {
+                    if (event.shiftKey) {
+                        // Allow default behavior (newline)
+                    } else {
+                        event.preventDefault(); // Prevent default (newline) for plain Enter
+                        sendMessage();
+                    }
+                };
+
                 const stopGeneration = async () => {
                     await fetch(`/api/chat/stop?conversation_id=${currentId.value}`, { method: 'POST' });
                     isGenerating.value = false;
@@ -775,7 +784,8 @@
                     forkConversation, deleteConversation, exportMarkdown, editName,
                     copyMessage, copyStreaming,
                     updateSystemPrompt, startRewrite, rollbackTo, renderMarkdown, formatTime, streamingContainer,
-                    showDiagramModal, diagramModalSvg, closeDiagramModal
+                    showDiagramModal, diagramModalSvg, closeDiagramModal,
+                    handleEnter
                 };
             }
         }).mount('#app');
