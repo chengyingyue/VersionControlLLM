@@ -245,6 +245,23 @@ updated_at: {now}
         with open(path, "r", encoding="utf-8") as f:
             return f.read()
 
+    def save_raw_markdown(self, conversation_id: str, markdown_content: str):
+        """
+        保存完整的 Markdown 内容到对话文件。
+        :param conversation_id: 对话 ID
+        :param markdown_content: 完整的 Markdown 内容
+        """
+        path = self._get_file_path(conversation_id)
+        if not os.path.exists(path):
+            logging.error(f"Conversation file not found for saving: {conversation_id}")
+            raise ValueError("Conversation not found")
+        
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(markdown_content)
+        
+        # 更新 updated_at 时间戳
+        self._update_timestamp(conversation_id)
+
     def delete_conversation(self, conversation_id: str):
         """删除对话文件"""
         path = self._get_file_path(conversation_id)

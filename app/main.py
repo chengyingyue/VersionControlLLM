@@ -17,7 +17,7 @@ from app.models.schema import (
     ChatRequest, RewriteRequest, ForkRequest, 
     RollbackRequest, CreateConversationRequest,
     RenameRequest, UpdateSystemPromptRequest,
-    LoginRequest
+    LoginRequest, UpdateConversationContentRequest
 )
 
 # 配置日志
@@ -203,6 +203,22 @@ async def delete_conversation(conversation_id: str, storage: StorageManager = De
     """删除指定对话"""
     storage.delete_conversation(conversation_id)
     return {"message": "Success"}
+
+@app.put("/api/conversations/{conversation_id}/content")
+async def update_conversation_content(
+    conversation_id: str,
+    request_body: UpdateConversationContentRequest,
+    storage: StorageManager = Depends(get_storage)
+):
+    """更新指定对话的完整 Markdown 内容。"""
+    try:
+        storage.save_raw_markdown(conversation_id, request_body.content)
+        return {"message": "Conversation content updated successfully"}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logging.error(f"Error updating conversation content: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.post("/api/chat/stop")
 async def stop_chat(conversation_id: str, user_id: str = Depends(get_current_user)):

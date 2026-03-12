@@ -122,6 +122,9 @@
                     <button @click="exportMarkdown" class="flex items-center gap-1 px-3 py-1.5 bg-gray-50 text-gray-700 rounded-md hover:bg-gray-100 text-sm">
                         <i data-lucide="download" class="w-4 h-4"></i> Export
                     </button>
+                    <button @click="openGlobalEditor" class="flex items-center gap-1 px-3 py-1.5 bg-blue-500 text-white rounded-md hover:bg-blue-600 text-sm">
+                        <i data-lucide="edit" class="w-4 h-4"></i> 全局编辑
+                    </button>
                 </div>
             </header>
 
@@ -196,6 +199,30 @@
             </div>
         </main>
 
+        <!-- Global Editor Sidebar -->
+        <div :class="['fixed right-0 top-0 h-full bg-white shadow-lg z-40 transition-transform duration-300 ease-in-out', showGlobalEditor ? 'translate-x-0' : 'translate-x-full']" 
+             style="width: 50%;">
+            <div class="flex flex-col h-full">
+                <div class="p-4 border-b flex justify-between items-center">
+                    <h3 class="text-lg font-semibold">全局编辑</h3>
+                    <button @click="hideGlobalEditor" class="p-2 text-gray-600 hover:bg-gray-100 rounded-full">
+                        <i data-lucide="x" class="w-5 h-5"></i>
+                    </button>
+                </div>
+                <div class="flex-1 p-4 overflow-y-auto">
+                    <textarea v-model="globalEditorContent" class="w-full h-full p-2 border border-gray-300 rounded-lg font-mono text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none"></textarea>
+                </div>
+                <div class="p-4 border-t flex justify-end gap-3">
+                    <button @click="saveGlobalEditorContent" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                        <i data-lucide="save" class="w-4 h-4 mr-2"></i>保存 (Ctrl+S)
+                    </button>
+                    <button @click="sendGlobalEditorToLLM" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
+                        <i data-lucide="send" class="w-4 h-4 mr-2"></i>发送给大模型
+                    </button>
+                </div>
+            </div>
+        </div>
+
         <!-- Modals -->
         <!-- Login Modal (Overlay) -->
         <div v-if="!isLoggedIn" class="fixed inset-0 bg-gray-900 flex items-center justify-center z-[100]">
@@ -264,6 +291,23 @@
                 </div>
             </div>
         </div>
+
+        <!-- Rewrite Message Modal -->
+        <div v-if="showRewriteModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div class="bg-white rounded-xl shadow-xl w-[600px]">
+                <div class="p-6 border-b">
+                    <h3 class="text-xl font-bold">重写消息</h3>
+                </div>
+                <div class="p-6">
+                    <textarea v-model="rewriteMessageContent" class="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 h-64 font-mono text-sm"></textarea>
+                </div>
+                <div class="p-6 bg-gray-50 flex justify-end gap-3 rounded-b-xl">
+                    <button @click="showRewriteModal = false" class="px-4 py-2 text-gray-600 hover:bg-gray-200 rounded-lg">取消</button>
+                    <button @click="confirmRewrite" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">保存修改</button>
+                </div>
+            </div>
+        </div>
+
         <div v-if="showDiagramModal" class="fixed inset-0 bg-black bg-opacity-80 z-[110]">
             <div class="absolute inset-0 flex items-center justify-center p-4 sm:p-6" @click.self="closeDiagramModal">
                 <div class="relative bg-white rounded-xl shadow-2xl w-full h-full flex flex-col">
@@ -308,6 +352,9 @@
                 const diagramModalSvg = ref("");
                 const diagramScale = ref(1.0); // Initial scale for diagram zoom
                 const diagramContainerRef = ref(null); // Ref for the mermaid container in modal
+
+                const showGlobalEditor = ref(false);
+                const globalEditorContent = ref("");
 
                 const md = window.markdownit({
                     highlight: function (str, lang) {
@@ -433,6 +480,144 @@
                     messages.value = [];
                     await nextTick();
                     lucide.createIcons();
+                };
+
+                const openGlobalEditor = async () => {
+                    console.log("openGlobalEditor called"); // Add this line
+                    if (!currentId.value) {
+                        alert("请先选择一个对话。");
+                        return;
+                    }
+                    try {
+                        const res = await fetch(`/api/conversations/${currentId.value}/export`);
+                        if (!res.ok) {
+                            throw new Error(`Failed to fetch conversation content: ${res.statusText}`);
+                        }
+                        globalEditorContent.value = await res.text();
+                        showGlobalEditor.value = true;
+                    } catch (error) {
+                        alert("加载对话内容失败: " + error.message);
+                        console.error("Error loading global editor content:", error);
+                    }
+                };
+
+                const hideGlobalEditor = () => {
+                    showGlobalEditor.value = false;
+                };
+
+                const saveGlobalEditorContent = async () => {
+                    if (!currentId.value) {
+                        alert("请先选择一个对话。");
+                        return;
+                    }
+                    try {
+                        const res = await fetch(`/api/conversations/${currentId.value}/content`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ content: globalEditorContent.value })
+                        });
+                        if (!res.ok) {
+                            throw new Error(`Failed to save conversation content: ${res.statusText}`);
+                        }
+                        alert("对话内容保存成功！");
+                        // Refresh the conversation to show updated content
+                        selectConversation(currentId.value);
+                    } catch (error) {
+                        alert("保存对话内容失败: " + error.message);
+                        console.error("Error saving global editor content:", error);
+                    }
+                };
+
+                const sendGlobalEditorToLLM = async () => {
+                    if (!currentId.value) {
+                        alert("请先选择一个对话。");
+                        return;
+                    }
+                    // First, save the current content
+                    await saveGlobalEditorContent();
+
+                    // Then, parse the content to find the last user message
+                    const messagesInEditor = [];
+                    const lines = globalEditorContent.value.split('\n');
+                    let currentRole = null;
+                    let currentContent = [];
+
+                    for (const line of lines) {
+                        const messageHeaderMatch = line.match(/^# Message \d+ \((User|Assistant|System)\)$/);
+                        if (messageHeaderMatch) {
+                            if (currentRole && currentContent.length > 0) {
+                                messagesInEditor.push({ role: currentRole.toLowerCase(), content: currentContent.join('\n').trim() });
+                            }
+                            currentRole = messageHeaderMatch[1];
+                            currentContent = [];
+                        } else {
+                            currentContent.push(line);
+                        }
+                    }
+                    if (currentRole && currentContent.length > 0) {
+                        messagesInEditor.push({ role: currentRole.toLowerCase(), content: currentContent.join('\n').trim() });
+                    }
+
+                    const lastUserMessage = messagesInEditor.reverse().find(msg => msg.role === 'user');
+
+                    if (lastUserMessage) {
+                        try {
+                            isGenerating.value = true;
+                            streamingContent.value = "";
+                            const res = await fetch('/api/chat', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    conversation_id: currentId.value,
+                                    message: lastUserMessage.content
+                                })
+                            });
+
+                            if (!res.ok) {
+                                throw new Error(`LLM request failed: ${res.statusText}`);
+                            }
+
+                            const reader = res.body.getReader();
+                            const decoder = new TextDecoder();
+                            let buffer = "";
+
+                            while (true) {
+                                const { value, done } = await reader.read();
+                                if (done) break;
+                                buffer += decoder.decode(value, { stream: true });
+
+                                const events = buffer.split('\n\n');
+                                buffer = events.pop(); // Keep incomplete event in buffer
+
+                                for (const event of events) {
+                                    if (event.startsWith("data: ")) {
+                                        const data = JSON.parse(event.substring(6));
+                                        if (data.type === 'delta') {
+                                            streamingContent.value += data.content;
+                                        } else if (data.type === 'complete') {
+                                            streamingContent.value = ""; // Clear streaming content after completion
+                                            selectConversation(currentId.value); // Refresh messages
+                                        } else if (data.type === 'stopped') {
+                                            streamingContent.value = ""; // Clear streaming content after stop
+                                            selectConversation(currentId.value); // Refresh messages
+                                        } else if (data.type === 'error') {
+                                            alert("LLM 生成出错: " + data.message);
+                                            streamingContent.value = "";
+                                        }
+                                    }
+                                }
+                                await nextTick();
+                                scrollToBottom();
+                            }
+                        } catch (error) {
+                            alert("发送给大模型失败: " + error.message);
+                            console.error("Error sending to LLM:", error);
+                        } finally {
+                            isGenerating.value = false;
+                        }
+                    } else {
+                        alert("未找到用户消息可发送给大模型。");
+                    }
                 };
 
                 const fetchConversations = async () => {
@@ -660,58 +845,11 @@
                     await selectConversation(currentId.value);
                 };
 
-                const startRewrite = async (index) => {
-                    const oldContent = messages.value[index].content;
-                    const newContent = prompt("重写该消息:", oldContent);
-                    if (!newContent || newContent === oldContent) return;
-
-                    isGenerating.value = true;
-                    streamingContent.value = "";
-                    
-                    const response = await fetch('/api/rewrite', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            conversation_id: currentId.value,
-                            index: index,
-                            role: messages.value[index].role,
-                            new_content: newContent
-                        })
-                    });
-
-                    // Handle SSE stream same as sendMessage...
-                    const reader = response.body.getReader();
-                    const decoder = new TextDecoder();
-                    let buffer = "";
-
-                    while (true) {
-                        const { done, value } = await reader.read();
-                        if (done) break;
-                        
-                        buffer += decoder.decode(value, { stream: true });
-                        const lines = buffer.split('\n');
-                        buffer = lines.pop();
-
-                        for (const line of lines) {
-                            if (line.trim().startsWith('data: ')) {
-                                try {
-                                    const data = JSON.parse(line.trim().slice(6));
-                                    if (data.type === 'delta') {
-                                        streamingContent.value += data.content;
-                                        await nextTick();
-                                        scrollToBottom();
-                                    } else if (data.type === 'complete' || data.type === 'stopped') {
-                                        isGenerating.value = false;
-                                        await selectConversation(currentId.value);
-                                        streamingContent.value = "";
-                                        await fetchConversations();
-                                    }
-                                } catch (e) {
-                                    console.error("Parse rewrite SSE error", e, line);
-                                }
-                            }
-                        }
-                    }
+                const startRewrite = (index) => {
+                    rewriteMessageContent.value = messages.value[index].content;
+                    rewriteMessageIndex.value = index;
+                    rewriteMessageRole.value = messages.value[index].role;
+                    showRewriteModal.value = true;
                 };
 
                 const rollbackTo = async (index) => {
@@ -781,6 +919,10 @@
                     mermaid.initialize({ startOnLoad: false, theme: 'default' });
                     window.addEventListener('keydown', (e) => {
                         if (e.key === 'Escape' && showDiagramModal.value) closeDiagramModal();
+                        if (showGlobalEditor.value && (e.ctrlKey || e.metaKey) && e.key === 's') {
+                            e.preventDefault();
+                            saveGlobalEditorContent();
+                        }
                     });
                 });
 
@@ -834,6 +976,60 @@
                     });
                 }, { deep: true });
 
+                const showRewriteModal = ref(false);
+                const rewriteMessageContent = ref("");
+                const rewriteMessageIndex = ref(null);
+                const rewriteMessageRole = ref("");
+
+                const confirmRewrite = async () => {
+                    if (rewriteMessageIndex.value === null || !rewriteMessageContent.value.trim()) return;
+
+                    const index = rewriteMessageIndex.value;
+                    const newContent = rewriteMessageContent.value;
+                    const role = rewriteMessageRole.value;
+                    const oldContent = messages.value[index].content;
+
+                    if (newContent === oldContent) {
+                        showRewriteModal.value = false;
+                        return;
+                    }
+
+                    isGenerating.value = true;
+                    streamingContent.value = "";
+                    
+                    // Optimistic update
+                    messages.value[index].content = newContent;
+                    await nextTick();
+                    scrollToBottom();
+
+                    const response = await fetch('/api/rewrite', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            conversation_id: currentId.value,
+                            index: index,
+                            role: role,
+                            new_content: newContent
+                        })
+                    });
+
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        alert("重写失败: " + (errorData.detail || response.statusText));
+                        isGenerating.value = false;
+                        // Revert optimistic update if rewrite fails
+                        messages.value[index].content = oldContent;
+                        return;
+                    }
+
+                    // Since rewrite no longer triggers SSE, just update the message and refresh
+                    isGenerating.value = false;
+                    streamingContent.value = "";
+                    showRewriteModal.value = false;
+                    await selectConversation(currentId.value); // Reload to get stable state
+                    await fetchConversations(); // Update updated_at
+                };
+
                 return {
                     isLoggedIn, currentUser, loginUserId, checkAuth, login, logout,
                     conversations, currentId, messages, streamingContent, inputMessage, 
@@ -845,7 +1041,9 @@
                     updateSystemPrompt, startRewrite, rollbackTo, renderMarkdown, formatTime, streamingContainer,
                     showDiagramModal, diagramModalSvg, closeDiagramModal,
                     diagramScale, diagramContainerRef,
-                    handleEnter
+                    handleEnter,
+                    showRewriteModal, rewriteMessageContent, rewriteMessageIndex, rewriteMessageRole, confirmRewrite,
+                    showGlobalEditor, globalEditorContent, openGlobalEditor, hideGlobalEditor, saveGlobalEditorContent, sendGlobalEditorToLLM
                 };
             }
         }).mount('#app');

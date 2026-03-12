@@ -17,7 +17,7 @@ python -m venv .venv
 .\.venv\Scripts\activate
 
 # 安装依赖
-pip install fastapi uvicorn httpx requests python-multipart
+pip install -r requirements.txt
 ```
 
 ## 2. 核心配置

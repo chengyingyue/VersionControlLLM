@@ -38,6 +38,9 @@ class RollbackRequest(BaseModel):
     conversation_id: str
     index: int
 
+class UpdateConversationContentRequest(BaseModel):
+    content: str
+
 class ConversationNodeResponse(BaseModel):
     id: str
     parent_id: Optional[str]
