@@ -826,27 +826,41 @@
                     }, 900);
                 };
 
+                const copyToClipboard = async (text, buttonEl) => {
+                    try {
+                        await navigator.clipboard.writeText(text);
+                        markCopyFeedback(buttonEl, true);
+                    } catch (error) {
+                        console.error("使用 navigator.clipboard.writeText 复制失败:", error);
+                        // Fallback to document.execCommand
+                        try {
+                            const textarea = document.createElement('textarea');
+                            textarea.value = text;
+                            textarea.style.position = 'fixed'; // Avoid scrolling to bottom
+                            textarea.style.left = '-9999px';
+                            document.body.appendChild(textarea);
+                            textarea.focus();
+                            textarea.select();
+                            document.execCommand('copy');
+                            document.body.removeChild(textarea);
+                            markCopyFeedback(buttonEl, true);
+                        } catch (fallbackError) {
+                            console.error("使用 document.execCommand('copy') 复制失败:", fallbackError);
+                            markCopyFeedback(buttonEl, false);
+                            alert("复制失败：您的浏览器不支持自动复制功能，请手动复制。");
+                        }
+                    }
+                };
+
                 const copyMessage = async (index, evt) => {
                     const msg = messages.value[index];
                     if (!msg || !msg.content) return;
-                    try {
-                        await navigator.clipboard.writeText(msg.content);
-                        markCopyFeedback(evt?.currentTarget, true);
-                    } catch (error) {
-                        console.error("复制消息失败:", error);
-                        markCopyFeedback(evt?.currentTarget, false);
-                    }
+                    await copyToClipboard(msg.content, evt?.currentTarget);
                 };
 
                 const copyStreaming = async (evt) => {
                     if (!streamingContent.value) return;
-                    try {
-                        await navigator.clipboard.writeText(streamingContent.value);
-                        markCopyFeedback(evt?.currentTarget, true);
-                    } catch (error) {
-                        console.error("复制消息失败:", error);
-                        markCopyFeedback(evt?.currentTarget, false);
-                    }
+                    await copyToClipboard(streamingContent.value, evt?.currentTarget);
                 };
 
                 const editName = async () => {
@@ -929,12 +943,9 @@
                         btn.setAttribute('title', '复制代码块');
                         btn.innerHTML = '<i data-lucide="copy" class="w-4 h-4"></i>';
                         btn.addEventListener('click', async () => {
-                            try {
-                                await navigator.clipboard.writeText(code.innerText);
-                                markCopyFeedback(btn, true);
-                            } catch (error) {
-                                console.error("复制代码块失败:", error);
-                                markCopyFeedback(btn, false);
+                            const code = pre.querySelector('code');
+                            if (code) {
+                                await copyToClipboard(code.innerText, btn);
                             }
                         });
                         pre.prepend(btn);
